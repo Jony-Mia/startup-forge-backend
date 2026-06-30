@@ -1,12 +1,15 @@
 const express = require("express");
 const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb")
-const uri = "mongodb://localhost:27017"
+const uri = "mongodb+srv://jony_mia:jony_mia_db@cluster0.faotqao.mongodb.net/?appName=Cluster0"
 const cors = require("cors");
+const dotenv = require("dotenv");
+const port = 4400
 const dns = require("dns/promises");
-dns.setServers(["1.1.1.1", "8.8.8.8"])
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+dotenv.config()
 app.use(cors());
-app.use(express.urlencoded())
+// app.use(express.urlencoded())
 app.use(express.json());
 app.use(cors({ origin: "*" }))
 const client = new MongoClient(uri, {
@@ -16,26 +19,25 @@ const client = new MongoClient(uri, {
         strict: true
     }
 })
+app.get("/",(req,res)=>{
+    res.send({
+        message:"Everything is ok",
+        status:true
+    })
+})
 async function run() {
     try {
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
+        
         const startupForge = client.db("startup_forge");
         const getOpportunities = startupForge.collection("opportunities")
-
         app.get("/opportunities", async (req, res) => {
-
+            
             const data = await getOpportunities.find().toArray()
-            console.log(data);
-
             res.send(data)
         });
         app.post("/opportunities", async (req, res) => {
             let newData = req.body;
-
             const newOpportunites = await getOpportunities.insertOne(newData);
-            console.log(newData);
-            console.log(newOpportunites);
 
             res.send(newData);
         })
@@ -46,8 +48,7 @@ async function run() {
                 console.log("Successfully deleted one document.");
             } else {
                 console.log("No documents matched the query. Deleted 0 documents.");
-            }
-                         
+            }                         
             res.send(result);
         })
     } catch (error) {
@@ -55,7 +56,7 @@ async function run() {
         console.log(error);
     }
 }
-run().catch(console.dir)
-app.listen(4400, () => {
+run()
+app.listen(port, () => {
     console.log("http://localhost:4400");
 })
