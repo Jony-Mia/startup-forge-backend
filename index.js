@@ -1,101 +1,161 @@
 const express = require("express");
-const app = express();
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb")
-const uri = "mongodb+srv://jony_mia:jony_mia_db@cluster0.faotqao.mongodb.net/?appName=Cluster0"
 const cors = require("cors");
 const dotenv = require("dotenv");
-const port = 4400
-const dns = require("dns/promises");
-dns.setServers(["1.1.1.1", "8.8.8.8"]);
-dotenv.config()
-app.use(cors());
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const dns = require("dns/promises")
+// dotenv.config();
 
+const app = express();
+const port = 4400;
+const allowedOrigin = /*process.env.CORS_ORIGIN || */ "*";
+// const uri = /*process.env.MONGODB_URI ||*/ "mongodb+srv://jony_mia:jony_mia_db@cluster0.faotqao.mongodb.net/?appName=Cluster0";
+const dbName = "startup_database";
+const uri = "mongodb://localhost:27017"
+
+app.use(cors({ origin: "*" }));
 app.use(express.json());
-app.use(cors({ origin: "*" }))
-const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        deprecationErrors: true,
-        strict: true
-    }
-})
-app.get("/", (req, res) => {
-    res.send({
-        message: "Everything is ok",
-        status: true
-    })
-})
+
+const client = new MongoClient(uri);
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 async function run() {
     try {
+        const db = client.db(dbName);
+        const opportunities = db.collection("opportunities");
+        const startupList = db.collection("startup_data")
+        const applications = db.collection("application")
+        // get routes 
+        app.get("/", async (req, res) => {
+            const startup_data = await startupList.find({}).toArray();
+            console.log(startup_data);
 
-        const startupForge = client.db("startup_forge");
-        const getOpportunities = startupForge.collection("opportunities")
-        const startupList = startupForge.collection("startup_collection")
-        app.get("/opportunities", async (req, res) => {
-
-            const data = await getOpportunities.find().toArray()
-            res.send(data)
-        });
-        app.post("/opportunities", async (req, res) => {
-            let newData = req.body;
-            const newOpportunites = await getOpportunities.insertOne(newData);
-
-            res.send(newData);
-        });
-        app.get("/getStartup", async (req, res) => {
-            let startupData = await startupList.find().toArray()
-            res.send(startupData)
-        });
-        app.delete(`/deleteOpportunities/:id`, async (req, res) => {
-            let id = req.params.id;
-            const result = await getOpportunities.deleteOne({ _id: new ObjectId(id) })
-            if (result.deletedCount === 1) {
-                console.log("Successfully deleted one document.");
-            } else {
-                console.log("No documents matched the query. Deleted 0 documents.");
-            }
-            res.send(result);
-        });
-
-        app.post("/createStartup", async (req, res) => {
-            let body = req.body;
-
-            let startupData = body[0];
-            startupData.image = body[1];
-
-            const createStartup = await startupList.insertOne(startupData);
-
-            res.send(body)
-        });
-
-        app.get("/singleStartup/:id", async (req, res) => {
-            let id = await req.params.id;
-            let singleData = await startupList.findOne({ _id: new ObjectId(id) })
-            console.log(id);
-
-            console.log(singleData);
-            res.send(singleData);
+            res.send(startup_data)
         })
-        app.patch("/editStartup/:id", async (req, res) => {
-            let updated = await req.body;
-            let id = await req.params.id;
-            let filter = {
+        app.post("/createStartup", async (req, res) => {
+            const body = req.body;
+            const createStartup = await startupList.insertOne(body)
+
+            console.log(body);
+            console.log(createStartup);
+            res.send(createStartup)
+
+        })
+        // app.get("/getOpportunities", async (req, res)=>{
+        //     const opportunitiesList =  opportunities.find({});
+        //     const cursor = await opportunitiesList.toArray();
+        //     res.send(cursor)
+        // })
+        app.get("/getStartup", async (req, res) => {
+            const startup = await startupList.find().toArray();
+            const opportunitiesList = await opportunities.find().toArray();
+            startup.filter(stList => {
+                opportunitiesList.filter((opList => {
+                    const result = stList.userId === opList.userId
+                    if (result) {
+                        res.send({ stList, opList: [opList] })
+                    }
+                }))
+            })
+        })
+        app.get("/getOpportunities", async (req, res) => {
+            const startup = await startupList.find().toArray();
+            const opportunitiesList = await opportunities.find().toArray();
+            startup.filter(stList => {
+                opportunitiesList.filter((opList => {
+                    const result = stList.userId === opList.userId
+                    if (result) {
+                        res.send([{
+                            id: stList._id,
+                            startup_name: stList.startup_name,
+                            industries: stList.industries,
+                            opportunity: opportunitiesList
+                        }])
+                    }
+                }))
+            })
+        })
+        app.get("/getSingelOpportunity/:id", async (req, res) => {
+            const id = req.params.id;
+            const startup = await startupList.find().toArray();
+            const opportunitiesList = await opportunities.find().toArray();
+            const query = { _id: new ObjectId(id) }
+            const singleData = await opportunities.findOne(query);
+            const updateViews = opportunities.updateOne(query, {
+                $inc: {
+                    views: 1
+                }
+            })
+            startup.filter(data => {
+                if (data.userId === singleData.userId) {
+                    console.log({ startup_name: data.startup_name, ...singleData });
+
+                    res.send({
+                        pitch: data.pitch,
+                        team_size: data.team_size,
+                        startup_address: data.startup_address,
+                        startup_name: data.startup_name,
+                        ...singleData
+                    })
+
+                }
+            })
+        })
+        app.get("/applicationList", async (req, res) => {
+            const applicationList = await applications.find().toArray();
+            console.log(applicationList);
+
+            res.send(applicationList)
+        })
+        // post routes 
+
+        app.post("/createOpportunities", async (req, res) => {
+            const body = req.body;
+            const createOpportunities = await opportunities.insertOne({ views: 0, ...body })
+            console.log(createOpportunities);
+
+            res.send(createOpportunities)
+        })
+        app.post("/submitApplication", async (req, res) => {
+            const body = req.body;
+
+            const submitApplication = await applications.insertOne({ ...body, status: "applied" })
+            console.log(submitApplication);
+            console.log(body);
+
+            if (submitApplication.acknowledged) {
+
+                res.send(submitApplication)
+            }
+
+        })
+
+        // delete routes
+        app.delete("/deleteOpportunities/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = {
                 _id: new ObjectId(id)
             }
-            let bodyData = updated[0];
-            bodyData.image = updated[1]
-            let updateStartup = await startupList.updateOne(filter, {
-                $set: bodyData
-            })
-            console.log(bodyData);
-            res.send(bodyData)
+            const action = await opportunities.deleteOne(query);
+            console.log(id);
+
+            if (action.acknowledged) {
+                res.send(action)
+            }
+
         })
     } catch (error) {
-        await client.close();
-        console.log(error);
+        console.error("Failed to start backend:", error);
+        process.exit(1);
     }
 }
-run()
-app.listen(port, () => {
-    console.log("http://localhost:4400");
+
+run();
+
+process.on("SIGINT", async () => {
+    await client.close();
+    process.exit(0);
+});
+app.listen(4400, (server) => {
+    console.log(server);
+
 })
